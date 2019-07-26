@@ -1,15 +1,20 @@
 #!/usr/bin/env python
 
 import pygame
+import argparse
+
+DEFAULT_WIDTH = 640
+DEFAULT_HEIGHT = 480
 
 X = 0
 Y = 1
 
 class DotByDot( object ):
 
-   def __init__( self ):
+   def __init__( self, size, filename=None ):
       self.zoom = 100
-      self.size = (8, 8)
+      self.size = size
+      self.filename = filename
 
       self.grid = []
       for x_grid in range( 0, self.size[X] ):
@@ -78,7 +83,7 @@ class DotByDot( object ):
                if pygame.K_ESCAPE == event.key:
                   self.running = False
                elif pygame.K_s == event.key:
-                  self.save_grid( 'grid.h' )
+                  self.save_grid( self.filename )
             elif pygame.MOUSEBUTTONDOWN == event.type or \
             pygame.MOUSEMOTION == event.type:
                draw_px = (pygame.mouse.get_pos()[X] / self.zoom, \
@@ -102,10 +107,51 @@ class DotByDot( object ):
                      pygame.Rect( x_grid * self.zoom, y_grid * self.zoom, \
                         self.zoom, self.zoom ) )
 
+         # Draw preview.
+         pzoom = 4
+         p_x = self.canvas.get_width() - (pzoom * self.size[X]) - 10
+         p_y = self.canvas.get_height() - (pzoom * self.size[Y]) - 10
+         pygame.draw.rect( self.canvas, (255, 255, 255), \
+            pygame.Rect( p_x, p_y, \
+               pzoom * self.size[X], pzoom * self.size[Y] ) )
+         pygame.draw.rect( self.canvas, (0, 0, 0), \
+            pygame.Rect( p_x, p_y, \
+               pzoom * self.size[X], pzoom * self.size[Y] ), pzoom )
+         for y_grid in range( 0, self.size[Y] ):
+            for x_grid in range( 0, self.size[X] ):
+               if 1 == self.grid[y_grid][x_grid]:
+                  pygame.draw.rect( self.canvas, (0, 0, 0), \
+                     pygame.Rect( \
+                        p_x + (x_grid * pzoom), \
+                        p_y + (y_grid * pzoom), \
+                        pzoom, pzoom ) )
+
          pygame.display.flip()
 
 if '__main__' == __name__:
+
+   parser = argparse.ArgumentParser()
+
+   parser.add_argument( '-z', '--zoom', type=int )
+   parser.add_argument( '-s', '--size', nargs="+", type=int )
+   parser.add_argument( '-f', '--file', type=str )
+
+   args = parser.parse_args()
+
+   size = None
+   if None == args.size:
+      size = (8, 8)
+   else:
+      size = tuple( args.size )
+
+   zoom = None
+   if None == args.zoom:
+      if DEFAULT_WIDTH / size[X] > DEFAULT_HEIGHT / size[Y]:
+         zoom = DEFAULT_WIDTH / size[X]
+      else:
+         zoom = DEFAULT_HEIGHT / size[Y]
+
    pygame.init()
-   dbd = DotByDot()
+   dbd = DotByDot( size, args.file )
    dbd.show()
 
