@@ -112,11 +112,13 @@ class DotByDot( object ):
          p_x = self.canvas.get_width() - (pzoom * self.size[X]) - 10
          p_y = self.canvas.get_height() - (pzoom * self.size[Y]) - 10
          pygame.draw.rect( self.canvas, (255, 255, 255), \
-            pygame.Rect( p_x, p_y, \
-               pzoom * self.size[X], pzoom * self.size[Y] ) )
+            pygame.Rect( p_x - pzoom, p_y - pzoom, \
+               (pzoom * self.size[X]) + (2 * pzoom), \
+               (pzoom * self.size[Y]) + (2 * pzoom) ) )
          pygame.draw.rect( self.canvas, (0, 0, 0), \
-            pygame.Rect( p_x, p_y, \
-               pzoom * self.size[X], pzoom * self.size[Y] ), pzoom )
+            pygame.Rect( p_x - pzoom, p_y - pzoom, \
+               (pzoom * self.size[X]) + (2 * pzoom), \
+               (pzoom * self.size[Y]) + (2 * pzoom) ), pzoom )
          for y_grid in range( 0, self.size[Y] ):
             for x_grid in range( 0, self.size[X] ):
                if 1 == self.grid[y_grid][x_grid]:
