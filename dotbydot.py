@@ -11,10 +11,11 @@ Y = 1
 
 class DotByDot( object ):
 
-   def __init__( self, size, filename=None ):
+   def __init__( self, size, filename=None, vertical=False ):
       self.zoom = 100
       self.size = size
       self.filename = filename
+      self.vertical = vertical
 
       self.grid = []
       for x_grid in range( 0, self.size[X] ):
@@ -61,9 +62,17 @@ class DotByDot( object ):
    def save_grid( self, path ):
 
       with open( path, 'w' ) as grid_h:
-         for row in self.grid:
-            row_int = self.row_to_int( row )
-            grid_h.write( "0x%x, " % row_int )
+         if self.vertical:
+            for col_idx in range( 0, len( self.grid[0] ) ):
+               col = []
+               for row in self.grid:
+                  col.append( row[col_idx] )
+               col_int = self.row_to_int( col )
+               grid_h.write( "0x%x, " % col_int )
+         else:
+            for row in self.grid:
+               row_int = self.row_to_int( row )
+               grid_h.write( "0x%x, " % row_int )
 
    def show( self ):
       self.canvas = pygame.display.set_mode( \
@@ -137,6 +146,7 @@ if '__main__' == __name__:
    parser.add_argument( '-z', '--zoom', type=int )
    parser.add_argument( '-s', '--size', nargs="+", type=int )
    parser.add_argument( '-f', '--file', type=str )
+   parser.add_argument( '-v', '--vertical', action='store_true' )
 
    args = parser.parse_args()
 
@@ -154,6 +164,6 @@ if '__main__' == __name__:
          zoom = DEFAULT_HEIGHT / size[Y]
 
    pygame.init()
-   dbd = DotByDot( size, args.file )
+   dbd = DotByDot( size, args.file, vertical=args.vertical )
    dbd.show()
 
