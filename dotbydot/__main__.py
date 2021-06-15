@@ -158,6 +158,8 @@ class DotByDot( object ):
                         self.running = False
                     elif pygame.K_s == event.key:
                         self.save_grid( self.filename )
+                    elif pygame.K_q == event.key:
+                        self.running = False
                 elif pygame.MOUSEBUTTONDOWN == event.type or \
                 pygame.MOUSEMOTION == event.type:
                     draw_px = (pygame.mouse.get_pos()[X] / self.zoom, \
