@@ -16,13 +16,15 @@ Y = 1
 class DotByDot( object ):
 
     def __init__(
-        self, size, bpp, little_endian, zoom, filename=None, vertical=False
+        self, size, bpp, little_endian, zoom, interlace,
+        filename=None, vertical=False
     ):
         self.zoom = int( zoom )
         self.size = size
         self.little_endian = little_endian
         self.filename = filename
         self.vertical = vertical
+        self.interlace = interlace
         self.bpp = bpp
         self.last_click = get_ticks()
         self.last_coords = (0, 0)
@@ -142,6 +144,9 @@ class DotByDot( object ):
             bits_out += self.bpp
             bits_out_total += self.bpp
             if bits <= bits_out:
+                if self.little_endian:
+                    int_out = \
+                        struct.unpack( "<I", struct.pack( ">I", int_out ) )[0]
                 yield int_out
                 bits_out = 0
                 int_out = 0
@@ -161,13 +166,23 @@ class DotByDot( object ):
                     for col_int in self.row_to_int( col, self.bpp * self.size[X] ):
                         grid_h.write( "0x%x, " % col_int )
             else:
-                for row in self.grid:
-                    for row_int in self.row_to_int( row, self.bpp * self.size[X] ):
-                        if self.little_endian:
-                            row_int = \
-                                struct.unpack( "<I",
-                                    struct.pack( ">I", row_int ) )[0]
-                        grid_h.write( "0x%x, " % row_int )
+                if self.interlace:
+                    for row_idx in range( 0, len( self.grid ), 2 ):
+                        for row_int in \
+                        self.row_to_int(
+                        self.grid[row_idx], self.bpp * self.size[X] ):
+                            grid_h.write( "0x%x, " % row_int )
+                    for row_idx in range( 1, len( self.grid ), 2 ):
+                        for row_int in \
+                        self.row_to_int( self.grid[row_idx],
+                        self.bpp * self.size[X] ):
+                            grid_h.write( "0x%x, " % row_int )
+                else:
+                    # Just go row by row.
+                    for row in self.grid:
+                        for row_int in \
+                        self.row_to_int( row, self.bpp * self.size[X] ):
+                            grid_h.write( "0x%x, " % row_int )
 
     def color_from_px( self, px ):
         color_draw = (0, 0, 0)
@@ -274,6 +289,8 @@ if '__main__' == __name__:
     parser.add_argument( '-b', '--bpp', type=int, default=1 )
     parser.add_argument( '-l', '--little', action='store_true',
         help='Use little-endian format.' )
+    parser.add_argument( '-i', '--interlace', action='store_true',
+        help='Place even lines in top half and odd lines in the bottom.' )
 
     args = parser.parse_args()
 
@@ -293,7 +310,7 @@ if '__main__' == __name__:
             zoom = DEFAULT_HEIGHT / size[Y]
 
     pygame.init()
-    dbd = DotByDot( size, args.bpp, args.little, zoom, args.file,
-        vertical=args.vertical )
+    dbd = DotByDot( size, args.bpp, args.little, zoom, args.interlace,
+        args.file, vertical=args.vertical )
     dbd.show()
 
