@@ -26,6 +26,7 @@ class DotByDot( object ):
         self.bpp = bpp
         self.last_click = get_ticks()
         self.last_coords = (0, 0)
+        self.last_px = 0
 
         self.logger = logging.getLogger( 'dotbydot' )
 
@@ -92,18 +93,25 @@ class DotByDot( object ):
                 (0, y_grid * self.zoom), \
                 (self.canvas.get_width(), y_grid * self.zoom), 2 )
 
-    def toggle_px( self, px ):
-        if 0 == self.grid[int( px[Y] )][int( px[X] )]:
-            self.grid[int( px[Y] )][int( px[X] )] = 1
-        elif 1 == self.grid[int( px[Y] )][int( px[X] )]:
+    def set_px( self, px_coords, new_px ):
+        self.grid[int( px_coords[Y] )][int( px_coords[X] )] = new_px
+
+    def toggle_px( self, px_coords ):
+        new_px = None
+
+        if 0 == self.grid[int( px_coords[Y] )][int( px_coords[X] )]:
+            new_px = 1
+        elif 1 == self.grid[int( px_coords[Y] )][int( px_coords[X] )]:
             if 1 == self.bpp:
-                self.grid[int( px[Y] )][int( px[X] )] = 0
+                new_px = 0
             elif 2 == self.bpp:
-                self.grid[int( px[Y] )][int( px[X] )] = 2
-        elif 2 == self.grid[int( px[Y] )][int( px[X] )]:
-            self.grid[int( px[Y] )][int( px[X] )] = 3
-        elif 3 == self.grid[int( px[Y] )][int( px[X] )]:
-            self.grid[int( px[Y] )][int( px[X] )] = 0
+                new_px = 2
+        elif 2 == self.grid[int( px_coords[Y] )][int( px_coords[X] )]:
+            new_px = 3
+        elif 3 == self.grid[int( px_coords[Y] )][int( px_coords[X] )]:
+            new_px = 0
+
+        return new_px
 
     #def draw_px( self, px ):
     #    if 0 == self.grid[int( px[Y] )][int( px[X] )]:
@@ -212,7 +220,10 @@ class DotByDot( object ):
                             draw_px[X], draw_px[Y],
                             self.last_coords[X], self.last_coords[Y] )
                         self.last_coords = (draw_px[X], draw_px[Y])
-                        self.toggle_px( draw_px )
+                        if pygame.MOUSEBUTTONDOWN == event.type:
+                            # Only choose a new color if we're clicking.
+                            self.last_px = self.toggle_px( draw_px )
+                        self.set_px( draw_px, self.last_px )
                     elif (0, 0, 1) == pygame.mouse.get_pressed():
                         self.logger.debug( 'px erase at %d, %d',
                             draw_px[X], draw_px[Y] )
