@@ -3,6 +3,7 @@
 import pygame
 import argparse
 import os
+import logging
 
 DEFAULT_WIDTH = 640
 DEFAULT_HEIGHT = 480
@@ -19,6 +20,8 @@ class DotByDot( object ):
         self.vertical = vertical
         self.bpp = bpp
 
+        self.logger = logging.getLogger( 'dotbydot' )
+
         bpp_mask = 0x1
         if 2 == bpp:
             bpp_mask = 0x3
@@ -30,30 +33,30 @@ class DotByDot( object ):
                 # Grab the text representation of the numbers from the file.
                 hexline = file_in.readline()
                 hexes = hexline.split( ', ' )
-                assert( len( hexes ) == self.size[Y] * self.bpp + 1 )
+                assert( len( hexes ) == self.size[Y] +  1 )
                 print( hexes )
 
                 for y_grid in range( 0, self.size[Y] ):
+                    self.logger.debug( 'reading row %d of %d', y_grid, self.size[Y] )
                     # Create a new empty row.
-                    self.grid.append( [] )
-                    for x_grid in range( 0, self.size[X] ):
-                        for byte in range( 0, self.bpp ):
-                            try:
-                                hex_int = int( hexes[0], 16 )
-                            except:
-                                continue
-                            hexes.pop( 0 )
-                            print( 'hex_int: {}'.format( hex_int ) )
-                            #for y_grid in range( 0, self.size[Y] ):
-                            int_out = 0
-                            for bit in range( self.bpp ):
-                                int_out |= hex_int & 0x1
-                                hex_int >>= 1
-                            self.grid[y_grid].insert( 0, int_out )
-                            print( 'idx: {} int_out: {}'.format( it, int_out ) )
-                            it += 1
+                    new_row = []
+                    row_hex_int = int( hexes[0], 16 )
+                    hexes.pop( 0 )
+                    self.logger.debug( 'read row_hex_int: %d', row_hex_int )
+                    for bit_idx in range( 0, self.size[X] ):
+                        # Grab each pixel from each bit(s).
+                        int_px = 0
+                        int_px |= row_hex_int & bpp_mask
+                        row_hex_int >>= self.bpp
+                        self.logger.debug(
+                            'bit_idx %d: int_px: %d', bit_idx, int_px )
+                        self.logger.debug( 'adding pixel: %d', int_px )
+                        new_row.insert( 0, int_px )
+                    self.grid.append( new_row )
+
+                    assert( self.size[X] == len( new_row ) )
+                        
                 print( self.grid )
-                assert( self.size[X] == len( self.grid[x_grid] ) )
             assert( self.size[Y] == len( self.grid ) )
         else:
             for x_grid in range( 0, self.size[X] ):
@@ -94,7 +97,7 @@ class DotByDot( object ):
         if 1 == self.grid[int( px[Y] )][int( px[X] )]:
             self.grid[int( px[Y] )][int( px[X] )] = 0
 
-    def row_to_int( self, row ):
+    def row_to_int( self, row, bits ):
         bits_out = 0
         bits_out_total = 0
         int_out = 0
@@ -114,15 +117,14 @@ class DotByDot( object ):
                     int_out |= 1
             bits_out += self.bpp
             bits_out_total += self.bpp
-            if 8 <= bits_out:
-                print( int_out )
+            if bits <= bits_out:
                 yield int_out
                 bits_out = 0
                 int_out = 0
 
-        assert( bits_out_total == 8 * self.bpp )
-
-        #return int_out
+        self.logger.debug( 'bits out: %d (should be %d)', bits_out_total,
+            bits )
+        assert( bits_out_total == bits )
 
     def save_grid( self, path ):
 
@@ -132,12 +134,25 @@ class DotByDot( object ):
                     col = []
                     for row in self.grid:
                         col.append( row[col_idx] )
-                    for col_int in self.row_to_int( col ):
+                    for col_int in self.row_to_int( col, self.bpp * 8 ):
                         grid_h.write( "0x%x, " % col_int )
             else:
                 for row in self.grid:
-                    for row_int in self.row_to_int( row ):
+                    for row_int in self.row_to_int( row, self.bpp * 8 ):
                         grid_h.write( "0x%x, " % row_int )
+
+    def color_from_px( self, px ):
+        color_draw = (0, 0, 0)
+        if 1 == px:
+            if 2 == self.bpp:
+                color_draw = (0, 255, 255)
+            else:
+                color_draw = (255, 255, 255)
+        elif 2 == px:
+            color_draw = (255, 0, 255)
+        elif 3 == px:
+            color_draw = (255, 255, 255)
+        return color_draw
 
     def show( self ):
         self.canvas = pygame.display.set_mode( \
@@ -177,17 +192,7 @@ class DotByDot( object ):
             self.canvas.fill( (255, 255, 255) )
             for y_grid in range( 0, self.size[Y] ):
                 for x_grid in range( 0, self.size[X] ):
-                    color_draw = (0, 0, 0)
-                    if 1 == self.grid[y_grid][x_grid]:
-                        if 2 == self.bpp:
-                            color_draw = (0, 255, 255)
-                        else:
-                            color_draw = (255, 255, 255)
-                    elif 2 == self.grid[y_grid][x_grid]:
-                        color_draw = (255, 0, 255)
-                    elif 3 == self.grid[y_grid][x_grid]:
-                        color_draw = (0, 0, 0)
-
+                    color_draw = self.color_from_px( self.grid[y_grid][x_grid] )
                     pygame.draw.rect( self.canvas, color_draw, \
                         pygame.Rect( x_grid * self.zoom, y_grid * self.zoom, \
                             self.zoom, self.zoom ) )
@@ -207,12 +212,12 @@ class DotByDot( object ):
                     (pzoom * self.size[Y]) + (2 * pzoom) ), pzoom )
             for y_grid in range( 0, self.size[Y] ):
                 for x_grid in range( 0, self.size[X] ):
-                    if 1 == self.grid[y_grid][x_grid]:
-                        pygame.draw.rect( self.canvas, (0, 0, 0), \
-                            pygame.Rect( \
-                                p_x + (x_grid * pzoom), \
-                                p_y + (y_grid * pzoom), \
-                                pzoom, pzoom ) )
+                    color_draw = self.color_from_px( self.grid[y_grid][x_grid] )
+                    pygame.draw.rect( self.canvas, color_draw, \
+                        pygame.Rect( \
+                            p_x + (x_grid * pzoom), \
+                            p_y + (y_grid * pzoom), \
+                            pzoom, pzoom ) )
 
             pygame.display.flip()
 
@@ -227,6 +232,8 @@ if '__main__' == __name__:
     parser.add_argument( '-b', '--bpp', type=int, default=1 )
 
     args = parser.parse_args()
+
+    logging.basicConfig( level=logging.DEBUG )
 
     size = None
     if None == args.size:
