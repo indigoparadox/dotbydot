@@ -4,6 +4,7 @@ import pygame
 import argparse
 import os
 import logging
+import struct
 from pygame.time import get_ticks
 
 DEFAULT_WIDTH = 320
@@ -14,9 +15,12 @@ Y = 1
 
 class DotByDot( object ):
 
-    def __init__( self, size, bpp, zoom, filename=None, vertical=False ):
+    def __init__(
+        self, size, bpp, little_endian, zoom, filename=None, vertical=False
+    ):
         self.zoom = int( zoom )
         self.size = size
+        self.little_endian = little_endian
         self.filename = filename
         self.vertical = vertical
         self.bpp = bpp
@@ -25,10 +29,6 @@ class DotByDot( object ):
 
         self.logger = logging.getLogger( 'dotbydot' )
 
-        bpp_mask = 0x1
-        if 2 == bpp:
-            bpp_mask = 0x3
-
         self.grid = []
         it = 0
         if os.path.exists( filename ):
@@ -36,25 +36,15 @@ class DotByDot( object ):
                 # Grab the text representation of the numbers from the file.
                 hexline = file_in.readline()
                 hexes = hexline.split( ', ' )
-                assert( len( hexes ) == self.size[Y] +  1 )
-                print( hexes )
+                #assert( len( hexes ) == self.size[Y] +  1 )
 
                 for y_grid in range( 0, self.size[Y] ):
                     self.logger.debug( 'reading row %d of %d', y_grid, self.size[Y] )
                     # Create a new empty row.
-                    new_row = []
                     row_hex_int = int( hexes[0], 16 )
                     hexes.pop( 0 )
                     self.logger.debug( 'read row_hex_int: %d', row_hex_int )
-                    for bit_idx in range( 0, self.size[X] ):
-                        # Grab each pixel from each bit(s).
-                        int_px = 0
-                        int_px |= row_hex_int & bpp_mask
-                        row_hex_int >>= self.bpp
-                        self.logger.debug(
-                            'bit_idx %d: int_px: %d', bit_idx, int_px )
-                        self.logger.debug( 'adding pixel: %d', int_px )
-                        new_row.insert( 0, int_px )
+                    new_row = self.row_from_int( row_hex_int )
                     self.grid.append( new_row )
 
                     assert( self.size[X] == len( new_row ) )
@@ -66,6 +56,29 @@ class DotByDot( object ):
                 self.grid.append( [] )
                 for y_grid in range( 0, self.size[Y] ):
                     self.grid[x_grid].append( 0 )
+
+    def row_from_int( self, row_hex_int ):
+        new_row = []
+
+        bpp_mask = 0x1
+        if 2 == self.bpp:
+            bpp_mask = 0x3
+
+        if self.little_endian:
+            row_hex_int = \
+                struct.unpack( "<I", struct.pack( ">I", row_hex_int ) )[0]
+
+        for bit_idx in range( 0, self.size[X] ):
+            # Grab each pixel from each bit(s).
+            int_px = 0
+            int_px |= row_hex_int & bpp_mask
+            row_hex_int >>= self.bpp
+            self.logger.debug(
+                'bit_idx %d: int_px: %d', bit_idx, int_px )
+            self.logger.debug( 'adding pixel: %d', int_px )
+            new_row.insert( 0, int_px )
+
+        return new_row
 
     def draw_gridlines( self ):
 
@@ -137,11 +150,15 @@ class DotByDot( object ):
                     col = []
                     for row in self.grid:
                         col.append( row[col_idx] )
-                    for col_int in self.row_to_int( col, self.bpp * 8 ):
+                    for col_int in self.row_to_int( col, self.bpp * self.size[X] ):
                         grid_h.write( "0x%x, " % col_int )
             else:
                 for row in self.grid:
-                    for row_int in self.row_to_int( row, self.bpp * 8 ):
+                    for row_int in self.row_to_int( row, self.bpp * self.size[X] ):
+                        if self.little_endian:
+                            row_int = \
+                                struct.unpack( "<I",
+                                    struct.pack( ">I", row_int ) )[0]
                         grid_h.write( "0x%x, " % row_int )
 
     def color_from_px( self, px ):
@@ -182,8 +199,14 @@ class DotByDot( object ):
                         pygame.mouse.get_pos()[Y] / self.zoom)
                     if (1, 0, 0) == pygame.mouse.get_pressed() and \
                     get_ticks() > self.last_click + 50 and \
-                    draw_px[X] != self.last_coords[X] and \
-                    draw_px[Y] != self.last_coords[Y]:
+                    (
+                        pygame.MOUSEBUTTONDOWN == event.type or \
+                        (
+                            pygame.MOUSEMOTION == event.type and \
+                            draw_px[X] != self.last_coords[X] and \
+                            draw_px[Y] != self.last_coords[Y]
+                        )
+                    ):
                         self.last_click = get_ticks()
                         self.logger.debug( 'px toggle at %d, %d (last %d, %d)',
                             draw_px[X], draw_px[Y],
@@ -238,6 +261,8 @@ if '__main__' == __name__:
     parser.add_argument( '-f', '--file', type=str )
     parser.add_argument( '-v', '--vertical', action='store_true' )
     parser.add_argument( '-b', '--bpp', type=int, default=1 )
+    parser.add_argument( '-l', '--little', action='store_true',
+        help='Use little-endian format.' )
 
     args = parser.parse_args()
 
@@ -257,6 +282,7 @@ if '__main__' == __name__:
             zoom = DEFAULT_HEIGHT / size[Y]
 
     pygame.init()
-    dbd = DotByDot( size, args.bpp, zoom, args.file, vertical=args.vertical )
+    dbd = DotByDot( size, args.bpp, args.little, zoom, args.file,
+        vertical=args.vertical )
     dbd.show()
 
