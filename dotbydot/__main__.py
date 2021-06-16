@@ -4,21 +4,24 @@ import pygame
 import argparse
 import os
 import logging
+from pygame.time import get_ticks
 
-DEFAULT_WIDTH = 640
-DEFAULT_HEIGHT = 480
+DEFAULT_WIDTH = 320
+DEFAULT_HEIGHT = 240
 
 X = 0
 Y = 1
 
 class DotByDot( object ):
 
-    def __init__( self, size, bpp, filename=None, vertical=False ):
-        self.zoom = 100
+    def __init__( self, size, bpp, zoom, filename=None, vertical=False ):
+        self.zoom = int( zoom )
         self.size = size
         self.filename = filename
         self.vertical = vertical
         self.bpp = bpp
+        self.last_click = get_ticks()
+        self.last_coords = (0, 0)
 
         self.logger = logging.getLogger( 'dotbydot' )
 
@@ -158,14 +161,12 @@ class DotByDot( object ):
         self.canvas = pygame.display.set_mode( \
             (self.size[X] * self.zoom, self.size[Y] * self.zoom) )
 
-        last_draw_px = (0, 0)
-        last_erase_px = (0, 0)
-
         self.running = True
         while self.running:
 
             # Get input state to apply below.
             for event in pygame.event.get():
+
                 if pygame.QUIT == event.type:
                     self.running = False
                 elif pygame.KEYDOWN == event.type:
@@ -179,14 +180,21 @@ class DotByDot( object ):
                 pygame.MOUSEMOTION == event.type:
                     draw_px = (pygame.mouse.get_pos()[X] / self.zoom, \
                         pygame.mouse.get_pos()[Y] / self.zoom)
-                    if (1, 0, 0) == pygame.mouse.get_pressed():
-                        if draw_px != last_draw_px:
-                            self.toggle_px( draw_px )
-                            last_draw_px = draw_px
+                    if (1, 0, 0) == pygame.mouse.get_pressed() and \
+                    get_ticks() > self.last_click + 50 and \
+                    draw_px[X] != self.last_coords[X] and \
+                    draw_px[Y] != self.last_coords[Y]:
+                        self.last_click = get_ticks()
+                        self.logger.debug( 'px toggle at %d, %d (last %d, %d)',
+                            draw_px[X], draw_px[Y],
+                            self.last_coords[X], self.last_coords[Y] )
+                        self.last_coords = (draw_px[X], draw_px[Y])
+                        self.toggle_px( draw_px )
                     elif (0, 0, 1) == pygame.mouse.get_pressed():
-                        if draw_px != last_erase_px:
-                            self.erase_px( draw_px )
-                            last_erase_px = draw_px
+                        self.logger.debug( 'px erase at %d, %d',
+                            draw_px[X], draw_px[Y] )
+                        self.last_coords = draw_px
+                        self.erase_px( draw_px )
 
             # Draw the current grid on the canvas.
             self.canvas.fill( (255, 255, 255) )
@@ -225,7 +233,7 @@ if '__main__' == __name__:
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument( '-z', '--zoom', type=int )
+    parser.add_argument( '-z', '--zoom', type=float )
     parser.add_argument( '-s', '--size', nargs="+", type=int )
     parser.add_argument( '-f', '--file', type=str )
     parser.add_argument( '-v', '--vertical', action='store_true' )
@@ -249,6 +257,6 @@ if '__main__' == __name__:
             zoom = DEFAULT_HEIGHT / size[Y]
 
     pygame.init()
-    dbd = DotByDot( size, args.bpp, args.file, vertical=args.vertical )
+    dbd = DotByDot( size, args.bpp, zoom, args.file, vertical=args.vertical )
     dbd.show()
 
