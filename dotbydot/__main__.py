@@ -16,16 +16,50 @@ Y = 1
 class DotByDot( object ):
 
     def __init__(
-        self, size, bpp, little_endian, zoom, interlace,
-        filename=None, vertical=False
+        self, size_in, size_out, bpp_in, bpp_out,
+        endian_in, endian_out, zoom, interlace_in, interlace_out,
+        filename_in=None, filename_out=None, vertical=False
     ):
         self.zoom = int( zoom )
-        self.size = size
-        self.little_endian = little_endian
-        self.filename = filename
+        self.size_in = size_in
+        # This is handled in main if size_out is None.
+        self.size_out = size_out
+        if 'l' == endian_in:
+            self.little_endian_in = True
+        elif 'b' == endian_in:
+            self.little_endian_in = False
+        else:
+            raise Exception( 'invalid endianness specified' )
+        if endian_out:
+            if 'l' == endian_out:
+                self.little_endian_out = True
+            elif 'b' == endian_out:
+                self.little_endian_out = False
+            else:
+                raise Exception( 'invalid endianness specified' )
+        else:
+            self.little_endian_out = self.little_endian_in
+        self.filename_in = filename_in
+        if filename_out:
+            self.filename_out = filename_out
+        else:
+            self.filename_out = filename_in
         self.vertical = vertical
-        self.interlace = interlace
-        self.bpp = bpp
+        self.interlace_in = True if 'y' == interlace_in.lower() or \
+            '1' == interlace_in.lower() or 't' == interlace_in.lower() else \
+            False
+        if interlace_out:
+            self.interlace_out = True if 'y' == interlace_out.lower() or \
+                '1' == interlace_out.lower() or \
+                't' == interlace_out.lower() else \
+                False
+        else:
+            self.interlace_out = self.interlace_in
+        self.bpp_in = bpp_in
+        if bpp_out:
+            self.bpp_out = bpp_out
+        else:
+            self.bpp_out = self.bpp_in
         self.last_click = get_ticks()
         self.last_coords = (0, 0)
         self.last_px = 0
@@ -34,63 +68,91 @@ class DotByDot( object ):
 
         self.grid = []
         it = 0
-        if os.path.exists( filename ):
-            with open( filename, 'r' ) as file_in:
+        if os.path.exists( filename_in ):
+            with open( filename_in, 'r' ) as file_in:
                 # Grab the text representation of the numbers from the file.
                 hexline = file_in.readline()
                 hexes = hexline.split( ', ' )
-                #assert( len( hexes ) == self.size[Y] +  1 )
 
-                for y_grid in range( 0, self.size[Y] ):
-                    self.logger.debug( 'reading row %d of %d', y_grid, self.size[Y] )
+                for y_grid in range( 0, self.size_in[Y] ):
+                    self.logger.debug(
+                        'reading row %d of %d', y_grid, self.size_in[Y] )
                     # Create a new empty row.
                     row_hex_int = int( hexes[0], 16 )
                     hexes.pop( 0 )
                     self.logger.debug( 'read row_hex_int: %d', row_hex_int )
                     new_row = self.row_from_int( row_hex_int )
+
+                    self.logger.debug( 'row is %d (Y) (should be %d)',
+                        len( new_row ), self.size_in[X] )
+                    assert( self.size_in[X] == len( new_row ) )
+
+                    # Pad row if size_out is bigger than size_in.
+                    for pad_idx in \
+                    range( 0, self.size_out[X] - self.size_in[X] ):
+                        self.logger.debug( 'padding idx (X): %d', pad_idx )
+                        new_row.append( 0 )
+
+                    self.logger.debug( 'row padded to %d (X) (should be %d)',
+                        len( new_row ), self.size_out[X] )
+                    assert( self.size_out[X] == len( new_row ) )
+
                     self.grid.append( new_row )
 
-                    assert( self.size[X] == len( new_row ) )
-                        
-                print( self.grid )
-            assert( self.size[Y] == len( self.grid ) )
+            self.logger.debug( 'grid is %d (Y) (should be %d)',
+                len( self.grid ), self.size_in[Y] )
+            assert( self.size_in[Y] == len( self.grid ) )
+
+            # Pad columns if size_out is bigger than size_in.
+            for pad_idx in range( 0, self.size_out[Y] - self.size_in[Y] ):
+                new_row = []
+                for pad_idx_x in range( 0, self.size_out[X] ):
+                    new_row.append( 0 )
+                self.grid.append( new_row )
+
+            self.logger.debug( 'grid padded to %d (Y) (should be %d)',
+                len( self.grid ), self.size_out[Y] )
+            assert( self.size_out[Y] == len( self.grid ) )
+
         else:
-            for x_grid in range( 0, self.size[X] ):
+            for x_grid in range( 0, self.size_in[X] ):
                 self.grid.append( [] )
-                for y_grid in range( 0, self.size[Y] ):
+                for y_grid in range( 0, self.size_in[Y] ):
                     self.grid[x_grid].append( 0 )
 
     def row_from_int( self, row_hex_int ):
         new_row = []
 
         bpp_mask = 0x1
-        if 2 == self.bpp:
+        if 2 == self.bpp_in:
             bpp_mask = 0x3
 
-        if self.little_endian:
+        if self.little_endian_in:
             row_hex_int = \
                 struct.unpack( "<I", struct.pack( ">I", row_hex_int ) )[0]
 
-        for bit_idx in range( 0, self.size[X] ):
+        for bit_idx in range( 0, self.size_in[X] ):
             # Grab each pixel from each bit(s).
             int_px = 0
             int_px |= row_hex_int & bpp_mask
-            row_hex_int >>= self.bpp
+            row_hex_int >>= self.bpp_in
             self.logger.debug(
                 'bit_idx %d: int_px: %d', bit_idx, int_px )
             self.logger.debug( 'adding pixel: %d', int_px )
             new_row.insert( 0, int_px )
 
+        # Padding if size_out bigger than size_in happens in load routine.
+
         return new_row
 
     def draw_gridlines( self ):
 
-        for x_grid in range( 0, self.size[X] ):
+        for x_grid in range( 0, self.size_out[X] ):
             pygame.draw.line( self.canvas, (0, 0, 0), \
                 (x_grid * self.zoom, 0), \
                 (x_grid * self.zoom, self.canvas.get_height()), 2 )
 
-        for y_grid in range( 0, self.size[Y] ):
+        for y_grid in range( 0, self.size_out[Y] ):
             pygame.draw.line( self.canvas, (0, 0, 0), \
                 (0, y_grid * self.zoom), \
                 (self.canvas.get_width(), y_grid * self.zoom), 2 )
@@ -104,9 +166,9 @@ class DotByDot( object ):
         if 0 == self.grid[int( px_coords[Y] )][int( px_coords[X] )]:
             new_px = 1
         elif 1 == self.grid[int( px_coords[Y] )][int( px_coords[X] )]:
-            if 1 == self.bpp:
+            if 1 == self.bpp_out:
                 new_px = 0
-            elif 2 == self.bpp:
+            elif 2 == self.bpp_out:
                 new_px = 2
         elif 2 == self.grid[int( px_coords[Y] )][int( px_coords[X] )]:
             new_px = 3
@@ -128,23 +190,23 @@ class DotByDot( object ):
         bits_out_total = 0
         int_out = 0
         for px in row:
-            if 1 == self.bpp:
+            if 1 == self.bpp_out:
                 int_out <<= 1
                 if 1 == px:
                     int_out |= 1
                 else:
                     int_out |= 0
-            elif 2 == self.bpp:
+            elif 2 == self.bpp_out:
                 int_out <<= 1
                 if 3 == px or 2 == px:
                     int_out |= 1
                 int_out <<= 1
                 if 3 == px or 1 == px:
                     int_out |= 1
-            bits_out += self.bpp
-            bits_out_total += self.bpp
+            bits_out += self.bpp_out
+            bits_out_total += self.bpp_out
             if bits <= bits_out:
-                if self.little_endian:
+                if self.little_endian_out:
                     int_out = \
                         struct.unpack( "<I", struct.pack( ">I", int_out ) )[0]
                 yield int_out
@@ -163,31 +225,32 @@ class DotByDot( object ):
                     col = []
                     for row in self.grid:
                         col.append( row[col_idx] )
-                    for col_int in self.row_to_int( col, self.bpp * self.size[X] ):
+                    for col_int in \
+                    self.row_to_int( col, self.bpp_out * self.size_out[X] ):
                         grid_h.write( "0x%x, " % col_int )
             else:
-                if self.interlace:
+                if self.interlace_out:
                     for row_idx in range( 0, len( self.grid ), 2 ):
                         for row_int in \
                         self.row_to_int(
-                        self.grid[row_idx], self.bpp * self.size[X] ):
+                        self.grid[row_idx], self.bpp_out * self.size_out[X] ):
                             grid_h.write( "0x%x, " % row_int )
                     for row_idx in range( 1, len( self.grid ), 2 ):
                         for row_int in \
                         self.row_to_int( self.grid[row_idx],
-                        self.bpp * self.size[X] ):
+                        self.bpp * self.size_out[X] ):
                             grid_h.write( "0x%x, " % row_int )
                 else:
                     # Just go row by row.
                     for row in self.grid:
                         for row_int in \
-                        self.row_to_int( row, self.bpp * self.size[X] ):
+                        self.row_to_int( row, self.bpp_out * self.size_out[X] ):
                             grid_h.write( "0x%x, " % row_int )
 
     def color_from_px( self, px ):
         color_draw = (0, 0, 0)
         if 1 == px:
-            if 2 == self.bpp:
+            if 2 == self.bpp_out:
                 color_draw = (0, 255, 255)
             else:
                 color_draw = (255, 255, 255)
@@ -199,7 +262,7 @@ class DotByDot( object ):
 
     def show( self ):
         self.canvas = pygame.display.set_mode( \
-            (self.size[X] * self.zoom, self.size[Y] * self.zoom) )
+            (self.size_out[X] * self.zoom, self.size_out[Y] * self.zoom) )
 
         self.running = True
         while self.running:
@@ -213,7 +276,7 @@ class DotByDot( object ):
                     if pygame.K_ESCAPE == event.key:
                         self.running = False
                     elif pygame.K_s == event.key:
-                        self.save_grid( self.filename )
+                        self.save_grid( self.filename_out )
                     elif pygame.K_q == event.key:
                         self.running = False
                 elif pygame.MOUSEBUTTONDOWN == event.type or \
@@ -247,8 +310,8 @@ class DotByDot( object ):
 
             # Draw the current grid on the canvas.
             self.canvas.fill( (255, 255, 255) )
-            for y_grid in range( 0, self.size[Y] ):
-                for x_grid in range( 0, self.size[X] ):
+            for y_grid in range( 0, self.size_out[Y] ):
+                for x_grid in range( 0, self.size_out[X] ):
                     color_draw = self.color_from_px( self.grid[y_grid][x_grid] )
                     pygame.draw.rect( self.canvas, color_draw, \
                         pygame.Rect( x_grid * self.zoom, y_grid * self.zoom, \
@@ -257,18 +320,18 @@ class DotByDot( object ):
 
             # Draw preview.
             pzoom = 4
-            p_x = self.canvas.get_width() - (pzoom * self.size[X]) - 10
-            p_y = self.canvas.get_height() - (pzoom * self.size[Y]) - 10
+            p_x = self.canvas.get_width() - (pzoom * self.size_out[X]) - 10
+            p_y = self.canvas.get_height() - (pzoom * self.size_out[Y]) - 10
             pygame.draw.rect( self.canvas, (255, 255, 255), \
                 pygame.Rect( p_x - pzoom, p_y - pzoom, \
-                    (pzoom * self.size[X]) + (2 * pzoom), \
-                    (pzoom * self.size[Y]) + (2 * pzoom) ) )
+                    (pzoom * self.size_out[X]) + (2 * pzoom), \
+                    (pzoom * self.size_out[Y]) + (2 * pzoom) ) )
             pygame.draw.rect( self.canvas, (0, 0, 0), \
                 pygame.Rect( p_x - pzoom, p_y - pzoom, \
-                    (pzoom * self.size[X]) + (2 * pzoom), \
-                    (pzoom * self.size[Y]) + (2 * pzoom) ), pzoom )
-            for y_grid in range( 0, self.size[Y] ):
-                for x_grid in range( 0, self.size[X] ):
+                    (pzoom * self.size_out[X]) + (2 * pzoom), \
+                    (pzoom * self.size_out[Y]) + (2 * pzoom) ), pzoom )
+            for y_grid in range( 0, self.size_out[Y] ):
+                for x_grid in range( 0, self.size_out[X] ):
                     color_draw = self.color_from_px( self.grid[y_grid][x_grid] )
                     pygame.draw.rect( self.canvas, color_draw, \
                         pygame.Rect( \
@@ -283,34 +346,49 @@ if '__main__' == __name__:
     parser = argparse.ArgumentParser()
 
     parser.add_argument( '-z', '--zoom', type=float )
-    parser.add_argument( '-s', '--size', nargs="+", type=int )
-    parser.add_argument( '-f', '--file', type=str )
+    parser.add_argument( '-is', '--insize', nargs="+", type=int )
+    parser.add_argument( '-os', '--outsize', nargs="+", type=int )
+    parser.add_argument( '-if', '--infile', type=str )
+    parser.add_argument( '-of', '--outfile', type=str )
     parser.add_argument( '-v', '--vertical', action='store_true' )
-    parser.add_argument( '-b', '--bpp', type=int, default=1 )
-    parser.add_argument( '-l', '--little', action='store_true',
+    parser.add_argument( '-ib', '--inbpp', type=int, default=1 )
+    parser.add_argument( '-ob', '--outbpp', type=int )
+    parser.add_argument( '-ie', '--inendian', type=str, default='b',
         help='Use little-endian format.' )
-    parser.add_argument( '-i', '--interlace', action='store_true',
+    parser.add_argument( '-oe', '--outendian', type=str,
+        help='Use little-endian format.' )
+    parser.add_argument( '-ii', '--ininterlace', type=str, default='f',
+        help='Place even lines in top half and odd lines in the bottom.' )
+    parser.add_argument( '-oi', '--outinterlace', type=str,
         help='Place even lines in top half and odd lines in the bottom.' )
 
     args = parser.parse_args()
 
     logging.basicConfig( level=logging.DEBUG )
 
-    size = None
-    if None == args.size:
-        size = (8, 8)
+    isize = None
+    if None == args.insize:
+        isize = (8, 8)
     else:
-        size = tuple( args.size )
+        isize = tuple( args.insize )
+    osize = None
+    if None == args.outsize:
+        osize = isize
+    else:
+        osize = tuple( args.outsize )
+
+    assert( osize >= isize )
 
     zoom = None
     if None == args.zoom:
-        if DEFAULT_WIDTH / size[X] > DEFAULT_HEIGHT / size[Y]:
-            zoom = DEFAULT_WIDTH / size[X]
+        if DEFAULT_WIDTH / isize[X] > DEFAULT_HEIGHT / isize[Y]:
+            zoom = DEFAULT_WIDTH / isize[X]
         else:
-            zoom = DEFAULT_HEIGHT / size[Y]
+            zoom = DEFAULT_HEIGHT / isize[Y]
 
     pygame.init()
-    dbd = DotByDot( size, args.bpp, args.little, zoom, args.interlace,
-        args.file, vertical=args.vertical )
+    dbd = DotByDot( isize, osize, args.inbpp, args.outbpp, args.inendian,
+        args.outendian, zoom, args.ininterlace, args.outinterlace,
+        args.infile, args.outfile, vertical=args.vertical )
     dbd.show()
 
