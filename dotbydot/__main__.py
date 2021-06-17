@@ -141,8 +141,7 @@ class DotByDot( object ):
             bpp_mask = 0x3
 
         if self.little_endian_in:
-            row_hex_int = \
-                struct.unpack( "<I", struct.pack( ">I", row_hex_int ) )[0]
+            row_hex_int = self.switch_endian( row_hex_int )
 
         for bit_idx in range( 0, self.size_in[X] ):
             # Grab each pixel from each bit(s).
@@ -182,6 +181,10 @@ class DotByDot( object ):
         px_coords[Y] >= self.size_out[Y]:
             return
 
+        self.logger.debug( 'px toggle at %d, %d (last %d, %d)',
+            px_coords[X], px_coords[Y],
+            self.last_coords[X], self.last_coords[Y] )
+
         if 0 == self.grid[int( px_coords[Y] )][int( px_coords[X] )]:
             new_px = 1
         elif 1 == self.grid[int( px_coords[Y] )][int( px_coords[X] )]:
@@ -209,6 +212,20 @@ class DotByDot( object ):
         if 1 == self.grid[int( px[Y] )][int( px[X] )]:
             self.grid[int( px[Y] )][int( px[X] )] = 0
 
+    def switch_endian( self, int_out ):
+        if 8 == self.size_out[X] * self.bpp_out:
+            int_out = struct.unpack(
+                "<B", struct.pack( ">B", int_out ) )[0]
+        elif 16 == self.size_out[X] * self.bpp_out:
+            int_out = struct.unpack(
+                "<H", struct.pack( ">H", int_out ) )[0]
+        elif 32 == self.size_out[X] * self.bpp_out:
+            int_out = struct.unpack(
+                "<I", struct.pack( ">I", int_out ) )[0]
+        else:
+            raise Exception( 'unpackable size specified' )
+        return int_out
+
     def row_to_int( self, row, bits ):
         bits_out = 0
         bits_out_total = 0
@@ -231,8 +248,7 @@ class DotByDot( object ):
             bits_out_total += self.bpp_out
             if bits <= bits_out:
                 if self.little_endian_out:
-                    int_out = \
-                        struct.unpack( "<I", struct.pack( ">I", int_out ) )[0]
+                    int_out = self.switch_endian( int_out )
                 yield int_out
                 bits_out = 0
                 int_out = 0
@@ -352,9 +368,6 @@ class DotByDot( object ):
                         )
                     ):
                         self.last_click = get_ticks()
-                        self.logger.debug( 'px toggle at %d, %d (last %d, %d)',
-                            draw_px[X], draw_px[Y],
-                            self.last_coords[X], self.last_coords[Y] )
                         self.last_coords = (draw_px[X], draw_px[Y])
                         if pygame.MOUSEBUTTONDOWN == event.type:
                             # Only choose a new color if we're clicking.
