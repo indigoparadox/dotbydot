@@ -148,12 +148,12 @@ class DotByDot( object ):
     def draw_gridlines( self ):
 
         for x_grid in range( 0, self.size_out[X] ):
-            pygame.draw.line( self.canvas, (0, 0, 0), \
+            pygame.draw.line( self.canvas, (128, 128, 128), \
                 (x_grid * self.zoom, 0), \
                 (x_grid * self.zoom, self.canvas.get_height()), 2 )
 
         for y_grid in range( 0, self.size_out[Y] ):
-            pygame.draw.line( self.canvas, (0, 0, 0), \
+            pygame.draw.line( self.canvas, (128, 128, 128), \
                 (0, y_grid * self.zoom), \
                 (self.canvas.get_width(), y_grid * self.zoom), 2 )
 
