@@ -30,6 +30,7 @@ class DotByDot( object ):
         endian_in, endian_out, zoom, pzoom, interlace_in, interlace_out,
         filename_in=None, filename_out=None, vertical=False
     ):
+        self.move_base_coords = None
         self.grid_undo = None
         self.grid_redo = None
         self.zoom = int( zoom )
@@ -324,6 +325,55 @@ class DotByDot( object ):
             color_draw = (255, 255, 255)
         return color_draw
 
+    def shift_image( self, x_offset, y_offset ):
+
+        if x_offset > 0:
+            for row_idx in range( 0, self.size_out[Y] ):
+                for px_idx in range( 0, self.size_out[X] ):
+                    if row_idx + 1 < 0 or row_idx + 1 >= self.size_out[Y]:
+                        continue
+                    elif px_idx + 1 < 0 or px_idx + 1 >= self.size_out[X]:
+                        continue
+
+                    self.grid[row_idx][px_idx] = \
+                        self.grid[row_idx][px_idx + 1]
+
+        if x_offset < 0:
+            for row_idx in reversed( range( 0, self.size_out[Y] ) ):
+                for px_idx in reversed( range( 0, self.size_out[X] ) ):
+                    if row_idx - 1 < 0 or row_idx - 1 >= self.size_out[Y]:
+                        continue
+                    elif px_idx - 1 < 0 or px_idx - 1 >= self.size_out[X]:
+                        continue
+
+                    self.grid[row_idx][px_idx] = \
+                        self.grid[row_idx][px_idx - 1]
+
+        if y_offset > 0:
+            for row_idx in range( 0, self.size_out[Y] ):
+                for px_idx in range( 0, self.size_out[X] ):
+                    if row_idx + 1 < 0 or row_idx + 1 >= self.size_out[Y]:
+                        continue
+                    elif px_idx + 1 < 0 or px_idx + 1 >= self.size_out[X]:
+                        continue
+
+                    self.grid[row_idx][px_idx] = \
+                        self.grid[row_idx + 1][px_idx]
+
+        if y_offset < 0:
+            for row_idx in reversed( range( 0, self.size_out[Y] ) ):
+                for px_idx in reversed( range( 0, self.size_out[X] ) ):
+                    if row_idx - 1 < 0 or row_idx - 1 >= self.size_out[Y]:
+                        continue
+                    elif px_idx - 1 < 0 or px_idx - 1 >= self.size_out[X]:
+                        continue
+
+                    self.grid[row_idx][px_idx] = \
+                        self.grid[row_idx - 1][px_idx]
+
+        self.redraw_canvas()
+        pygame.display.flip()
+
     def show( self ):
         canvas_zoom_area_sz = (2 * self.size_out[X]) * self.preview_zoom
         self.canvas = pygame.display.set_mode(
@@ -393,15 +443,30 @@ class DotByDot( object ):
                         self.last_coords = px_coords
                         self.erase_px( px_coords )
 
-            # Draw the current grid on the canvas.
-            self.canvas.fill( (255, 255, 255) )
-            for y_grid in range( 0, self.size_out[Y] ):
-                for x_grid in range( 0, self.size_out[X] ):
-                    color_draw = self.color_from_px( self.grid[y_grid][x_grid] )
-                    pygame.draw.rect( self.canvas, color_draw, \
-                        pygame.Rect( x_grid * self.zoom, y_grid * self.zoom, \
-                            self.zoom, self.zoom ) )
-            self.draw_gridlines()
+                    elif (0, 1, 0) == pygame.mouse.get_pressed():
+                        if pygame.MOUSEBUTTONDOWN == event.type:
+                            # Set base pixel to judge movement from.
+                            self.move_base_coords = px_coords
+
+                        elif pygame.MOUSEMOTION == event.type:
+                            # Move pixels based on mouse movement.
+                            if None != px_coords and \
+                            None != self.move_base_coords and \
+                            (int( px_coords[X] ) != \
+                                int( self.move_base_coords[X] ) or \
+                            int( px_coords[Y] ) != \
+                                int( self.move_base_coords[Y]) ):
+                                self.logger.debug( 'moving %d %d',
+                                    px_coords[X] - self.move_base_coords[X],
+                                    px_coords[Y] - self.move_base_coords[Y] )
+                                self.shift_image(
+                                    int( self.move_base_coords[X] - \
+                                        px_coords[X] ),
+                                    int( self.move_base_coords[Y] - \
+                                        px_coords[Y]) )
+                                self.move_base_coords = px_coords
+            
+            self.redraw_canvas()
 
             # Draw preview.
             p_w = self.preview_zoom * self.size_out[Y]
@@ -445,6 +510,17 @@ class DotByDot( object ):
                 height=int( self.size_out[Y] / 2 ) )
 
             pygame.display.flip()
+
+    def redraw_canvas( self ):
+        # Draw the current grid on the canvas.
+        self.canvas.fill( (255, 255, 255) )
+        for y_grid in range( 0, self.size_out[Y] ):
+            for x_grid in range( 0, self.size_out[X] ):
+                color_draw = self.color_from_px( self.grid[y_grid][x_grid] )
+                pygame.draw.rect( self.canvas, color_draw, \
+                    pygame.Rect( x_grid * self.zoom, y_grid * self.zoom, \
+                        self.zoom, self.zoom ) )
+        self.draw_gridlines()
 
     def show_preview( self, p_x, p_y, start_x, start_y, width, height ):
         #pygame.draw.rect( self.canvas, (255, 255, 255), \
