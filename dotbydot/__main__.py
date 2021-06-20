@@ -209,7 +209,7 @@ class DotByDot( object ):
         px[Y] >= self.size_out[Y]:
             return
 
-        if 1 == self.grid[int( px[Y] )][int( px[X] )]:
+        if 0 != self.grid[int( px[Y] )][int( px[X] )]:
             self.grid[int( px[Y] )][int( px[X] )] = 0
 
     def switch_endian( self, int_out ):
@@ -352,23 +352,28 @@ class DotByDot( object ):
                 elif pygame.MOUSEBUTTONDOWN == event.type or \
                 pygame.MOUSEMOTION == event.type:
 
+                    # Save undo for whatever comes next.
                     if pygame.MOUSEBUTTONDOWN == event.type:
                         self.save_undo()
 
-                    draw_px = (pygame.mouse.get_pos()[X] / self.zoom, \
+                    # Figure out which pixel was clicked.
+                    px_coords = (pygame.mouse.get_pos()[X] / self.zoom, \
                         pygame.mouse.get_pos()[Y] / self.zoom)
+
+                    # Left Button, After Delay, New Pixel or Motion
                     if (1, 0, 0) == pygame.mouse.get_pressed() and \
                     get_ticks() > self.last_click + 50 and \
                     (
                         pygame.MOUSEBUTTONDOWN == event.type or \
                         (
+                            
                             pygame.MOUSEMOTION == event.type and \
-                            draw_px[X] != self.last_coords[X] and \
-                            draw_px[Y] != self.last_coords[Y]
+                            px_coords[X] != self.last_coords[X] and \
+                            px_coords[Y] != self.last_coords[Y]
                         )
                     ):
                         self.last_click = get_ticks()
-                        self.last_coords = (draw_px[X], draw_px[Y])
+                        self.last_coords = (px_coords[X], px_coords[Y])
                         if pygame.MOUSEBUTTONDOWN == event.type:
                             # Only choose a new color if we're clicking.
                             if pygame.key.get_pressed()[pygame.K_1]:
@@ -378,13 +383,15 @@ class DotByDot( object ):
                             elif pygame.key.get_pressed()[pygame.K_3]:
                                 self.last_px = IDX_WHITE
                             else:
-                                self.last_px = self.toggle_px( draw_px )
-                        self.set_px( draw_px, self.last_px )
+                                self.last_px = self.toggle_px( px_coords )
+                        self.set_px( px_coords, self.last_px )
+
+                    # Right Button
                     elif (0, 0, 1) == pygame.mouse.get_pressed():
                         self.logger.debug( 'px erase at %d, %d',
-                            draw_px[X], draw_px[Y] )
-                        self.last_coords = draw_px
-                        self.erase_px( draw_px )
+                            px_coords[X], px_coords[Y] )
+                        self.last_coords = px_coords
+                        self.erase_px( px_coords )
 
             # Draw the current grid on the canvas.
             self.canvas.fill( (255, 255, 255) )
