@@ -2,7 +2,7 @@
 import os
 import logging
 
-from . import row_from_int
+from . import row_from_int, row_to_int
 
 X = 0
 Y = 1
@@ -32,33 +32,10 @@ def read_file( filename_in, size, bpp, endian ):
                     len( new_row ), size[X] )
                 assert( size[X] == len( new_row ) )
 
-                # Pad row if size_out is bigger than size_in.
-                # TODO
-                #for pad_idx in \
-                #range( 0, self.size_out[X] - self.size_in[X] ):
-                #    self.logger.debug( 'padding idx (X): %d', pad_idx )
-                #    new_row.append( 0 )
-
-                #self.logger.debug( 'row padded to %d (X) (should be %d)',
-                #    len( new_row ), self.size_out[X] )
-                #assert( self.size_out[X] == len( new_row ) )
-
                 grid.append( new_row )
 
         logger.debug( 'grid is %d (Y) (should be %d)', len( grid ), size[Y] )
         assert( size[Y] == len( grid ) )
-
-        # Pad columns if size_out is bigger than size_in.
-        # TODO
-        #for pad_idx in range( 0, self.size_out[Y] - self.size_in[Y] ):
-        #    new_row = []
-        #    for pad_idx_x in range( 0, self.size_out[X] ):
-        #        new_row.append( 0 )
-        #    self.grid.append( new_row )
-
-        #self.logger.debug( 'grid padded to %d (Y) (should be %d)',
-        #    len( self.grid ), self.size_out[Y] )
-        #assert( self.size_out[Y] == len( self.grid ) )
 
     else:
         for x_grid in range( 0, size[X] ):
@@ -68,6 +45,32 @@ def read_file( filename_in, size, bpp, endian ):
     
     return grid
 
-def write_file( path, grid, bpp, endian ):
-    pass
+def write_file( \
+filename_out, grid, size, bpp, endian, interlace=False, vertical=False ):
+    
+    with open( filename_out, 'w' ) as grid_h:
+        if vertical:
+            for col_idx in range( 0, len( grid[X] ) ):
+                col = []
+                for row in grid:
+                    col.append( row[col_idx] )
+                for col_int in \
+                row_to_int( col, size, bpp, endian ):
+                    grid_h.write( "0x%x, " % col_int )
+        else:
+            if interlace:
+                for row_idx in range( 0, len( grid ), 2 ):
+                    for row_int in \
+                    row_to_int( grid[row_idx], size, bpp, endian ):
+                        grid_h.write( "0x%x, " % row_int )
+                for row_idx in range( 1, len( grid ), 2 ):
+                    for row_int in \
+                    row_to_int( grid[row_idx], size, bpp, endian ):
+                        grid_h.write( "0x%x, " % row_int )
+            else:
+                # Just go row by row.
+                for row in grid:
+                    for row_int in \
+                    row_to_int( row, size, bpp, endian ):
+                        grid_h.write( "0x%x, " % row_int )
 

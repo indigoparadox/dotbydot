@@ -86,6 +86,25 @@ class DotByDot( object ):
 
         self.grid = header.read_file( filename_in, size_in, bpp_in, endian_in )
 
+        # Pad rows if size_out is bigger than size_in.
+        for row_idx in range( self.size_in[Y] ):
+            for pad_idx in \
+            range( 0, self.size_out[X] - self.size_in[X] ):
+                self.logger.debug( 'padding idx (X): %d', pad_idx )
+                self.grid[row_idx].append( 0 )
+
+            self.logger.debug( 'row %d padded to %d (X) (should be %d)',
+                row_idx, len( self.grid[row_idx] ), self.size_out[X] )
+            assert( self.size_out[X] == len( self.grid[row_idx] ) )
+
+        # Pad columns if size_out is bigger than size_in.
+        for pad_idx in range( 0, self.size_out[Y] - self.size_in[Y] ):
+            new_row = []
+            for pad_idx_x in range( 0, self.size_out[X] ):
+                new_row.append( 0 )
+            self.grid.append( new_row )
+        assert( self.size_out[Y] == len( self.grid ) )
+
     def draw_gridlines( self ):
 
         for x_grid in range( 0, self.size_out[X] ):
@@ -141,36 +160,6 @@ class DotByDot( object ):
         if 0 != self.grid[int( px[Y] )][int( px[X] )]:
             self.grid[int( px[Y] )][int( px[X] )] = 0
 
-    def row_to_int( self, row, bits ):
-        bits_out = 0
-        bits_out_total = 0
-        int_out = 0
-        for px in row:
-            if 1 == self.bpp_out:
-                int_out <<= 1
-                if 1 == px:
-                    int_out |= 1
-                else:
-                    int_out |= 0
-            elif 2 == self.bpp_out:
-                int_out <<= 1
-                if 3 == px or 2 == px:
-                    int_out |= 1
-                int_out <<= 1
-                if 3 == px or 1 == px:
-                    int_out |= 1
-            bits_out += self.bpp_out
-            bits_out_total += self.bpp_out
-            if bits <= bits_out:
-                if self.little_endian_out:
-                    int_out = self.switch_endian( int_out )
-                yield int_out
-                bits_out = 0
-                int_out = 0
-
-        self.logger.debug( 'bits out: %d (should be %d)', bits_out_total,
-            bits )
-        assert( bits_out_total == bits )
 
     def save_undo( self ):
         self.logger.debug( 'saving state for undo...' )
@@ -197,34 +186,8 @@ class DotByDot( object ):
             self.logger.warning( 'no redo buffer present' )
 
     def save_grid( self, path ):
-
-        with open( path, 'w' ) as grid_h:
-            if self.vertical:
-                for col_idx in range( 0, len( self.grid[0] ) ):
-                    col = []
-                    for row in self.grid:
-                        col.append( row[col_idx] )
-                    for col_int in \
-                    self.row_to_int( col, self.bpp_out * self.size_out[X] ):
-                        grid_h.write( "0x%x, " % col_int )
-            else:
-                if self.interlace_out:
-                    for row_idx in range( 0, len( self.grid ), 2 ):
-                        for row_int in \
-                        self.row_to_int(
-                        self.grid[row_idx], self.bpp_out * self.size_out[X] ):
-                            grid_h.write( "0x%x, " % row_int )
-                    for row_idx in range( 1, len( self.grid ), 2 ):
-                        for row_int in \
-                        self.row_to_int( self.grid[row_idx],
-                        self.bpp * self.size_out[X] ):
-                            grid_h.write( "0x%x, " % row_int )
-                else:
-                    # Just go row by row.
-                    for row in self.grid:
-                        for row_int in \
-                        self.row_to_int( row, self.bpp_out * self.size_out[X] ):
-                            grid_h.write( "0x%x, " % row_int )
+        header.write_file( self.filename_out, self.grid,
+            self.size_out, self.bpp_out, self.endian_out )
 
     def color_from_px( self, px ):
         color_draw = (0, 0, 0)
