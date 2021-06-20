@@ -16,7 +16,7 @@ def row_to_int( row, size, bpp, endian ):
     for px in row:
         if 1 == bpp:
             int_out <<= 1
-            if 1 == px:
+            if 0 < px:
                 int_out |= 1
             else:
                 int_out |= 0

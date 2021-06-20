@@ -191,15 +191,16 @@ class DotByDot( object ):
 
     def color_from_px( self, px ):
         color_draw = (0, 0, 0)
-        if 1 == px:
-            if 2 == self.bpp_out:
-                color_draw = (0, 255, 255)
-            else:
-                color_draw = (255, 255, 255)
-        elif 2 == px:
-            color_draw = (255, 0, 255)
-        elif 3 == px:
-            color_draw = (255, 255, 255)
+        if 1 == px and 1 < self.bpp_out:
+            color_draw = COLOR_CYAN
+        elif 2 == px and 1 < self.bpp_out:
+            color_draw = COLOR_MAGENTA
+        elif 3 == px and 1 < self.bpp_out:
+            color_draw = COLOR_WHITE
+        elif 0 == px:
+            color_draw = COLOR_BLACK
+        else:
+            color_draw = COLOR_WHITE
         return color_draw
 
     def shift_image( self, x_offset, y_offset ):
