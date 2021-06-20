@@ -7,6 +7,8 @@ import logging
 import struct
 from pygame.time import get_ticks
 
+from .formats import header
+
 DEFAULT_WIDTH = 320
 DEFAULT_HEIGHT = 240
 
@@ -38,6 +40,8 @@ class DotByDot( object ):
         self.size_in = size_in
         # This is handled in main if size_out is None.
         self.size_out = size_out
+        self.endian_in = endian_in
+        self.endian_out = endian_out
         if 'l' == endian_in:
             self.little_endian_in = True
         elif 'b' == endian_in:
@@ -80,83 +84,7 @@ class DotByDot( object ):
 
         self.logger = logging.getLogger( 'dotbydot' )
 
-        self.grid = []
-        it = 0
-        if os.path.exists( filename_in ):
-            with open( filename_in, 'r' ) as file_in:
-                # Grab the text representation of the numbers from the file.
-                hexline = file_in.readline()
-                hexes = hexline.split( ', ' )
-
-                for y_grid in range( 0, self.size_in[Y] ):
-                    self.logger.debug(
-                        'reading row %d of %d', y_grid, self.size_in[Y] )
-                    # Create a new empty row.
-                    row_hex_int = int( hexes[0], 16 )
-                    hexes.pop( 0 )
-                    self.logger.debug( 'read row_hex_int: %d', row_hex_int )
-                    new_row = self.row_from_int( row_hex_int )
-
-                    self.logger.debug( 'row is %d (Y) (should be %d)',
-                        len( new_row ), self.size_in[X] )
-                    assert( self.size_in[X] == len( new_row ) )
-
-                    # Pad row if size_out is bigger than size_in.
-                    for pad_idx in \
-                    range( 0, self.size_out[X] - self.size_in[X] ):
-                        self.logger.debug( 'padding idx (X): %d', pad_idx )
-                        new_row.append( 0 )
-
-                    self.logger.debug( 'row padded to %d (X) (should be %d)',
-                        len( new_row ), self.size_out[X] )
-                    assert( self.size_out[X] == len( new_row ) )
-
-                    self.grid.append( new_row )
-
-            self.logger.debug( 'grid is %d (Y) (should be %d)',
-                len( self.grid ), self.size_in[Y] )
-            assert( self.size_in[Y] == len( self.grid ) )
-
-            # Pad columns if size_out is bigger than size_in.
-            for pad_idx in range( 0, self.size_out[Y] - self.size_in[Y] ):
-                new_row = []
-                for pad_idx_x in range( 0, self.size_out[X] ):
-                    new_row.append( 0 )
-                self.grid.append( new_row )
-
-            self.logger.debug( 'grid padded to %d (Y) (should be %d)',
-                len( self.grid ), self.size_out[Y] )
-            assert( self.size_out[Y] == len( self.grid ) )
-
-        else:
-            for x_grid in range( 0, self.size_in[X] ):
-                self.grid.append( [] )
-                for y_grid in range( 0, self.size_in[Y] ):
-                    self.grid[x_grid].append( 0 )
-
-    def row_from_int( self, row_hex_int ):
-        new_row = []
-
-        bpp_mask = 0x1
-        if 2 == self.bpp_in:
-            bpp_mask = 0x3
-
-        if self.little_endian_in:
-            row_hex_int = self.switch_endian( row_hex_int )
-
-        for bit_idx in range( 0, self.size_in[X] ):
-            # Grab each pixel from each bit(s).
-            int_px = 0
-            int_px |= row_hex_int & bpp_mask
-            row_hex_int >>= self.bpp_in
-            self.logger.debug(
-                'bit_idx %d: int_px: %d', bit_idx, int_px )
-            self.logger.debug( 'adding pixel: %d', int_px )
-            new_row.insert( 0, int_px )
-
-        # Padding if size_out bigger than size_in happens in load routine.
-
-        return new_row
+        self.grid = header.read_file( filename_in, size_in, bpp_in, endian_in )
 
     def draw_gridlines( self ):
 
@@ -212,20 +140,6 @@ class DotByDot( object ):
 
         if 0 != self.grid[int( px[Y] )][int( px[X] )]:
             self.grid[int( px[Y] )][int( px[X] )] = 0
-
-    def switch_endian( self, int_out ):
-        if 8 == self.size_out[X] * self.bpp_out:
-            int_out = struct.unpack(
-                "<B", struct.pack( ">B", int_out ) )[0]
-        elif 16 == self.size_out[X] * self.bpp_out:
-            int_out = struct.unpack(
-                "<H", struct.pack( ">H", int_out ) )[0]
-        elif 32 == self.size_out[X] * self.bpp_out:
-            int_out = struct.unpack(
-                "<I", struct.pack( ">I", int_out ) )[0]
-        else:
-            raise Exception( 'unpackable size specified' )
-        return int_out
 
     def row_to_int( self, row, bits ):
         bits_out = 0
@@ -523,14 +437,6 @@ class DotByDot( object ):
         self.draw_gridlines()
 
     def show_preview( self, p_x, p_y, start_x, start_y, width, height ):
-        #pygame.draw.rect( self.canvas, (255, 255, 255), \
-        #    pygame.Rect( p_x - self.preview_zoom, p_y - self.preview_zoom, \
-        #        (self.preview_zoom * self.size_out[X]) + (2 * self.preview_zoom), \
-        #        (self.preview_zoom * self.size_out[Y]) + (2 * self.preview_zoom) ) )
-        #pygame.draw.rect( self.canvas, (0, 0, 0), \
-        #    pygame.Rect( p_x - self.preview_zoom, p_y - self.preview_zoom, \
-        #        (self.preview_zoom * self.size_out[X]) + (2 * self.preview_zoom), \
-        #        (self.preview_zoom * self.size_out[Y]) + (2 * self.preview_zoom) ), self.preview_zoom )
         # Iterate from source coords.
         for y_grid in range( start_y, start_y + height ):
             for x_grid in range( start_x, start_x + width ):
