@@ -195,6 +195,7 @@ class DotByDot( object ):
             self.logger.warning( 'no redo buffer present' )
 
     def save_grid( self, path ):
+        # TODO: Select output format.
         header.write_file( self.filename_out, self.grid,
             self.size_out, self.bpp_out, self.endian_out )
 
@@ -426,23 +427,36 @@ if '__main__' == __name__:
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument( '-z', '--zoom', type=int )
-    parser.add_argument( '-pz', '--pzoom', type=int, default=4 )
-    parser.add_argument( '-is', '--insize', nargs="+", type=int )
-    parser.add_argument( '-os', '--outsize', nargs="+", type=int )
-    parser.add_argument( '-if', '--infile', type=str )
-    parser.add_argument( '-of', '--outfile', type=str )
-    parser.add_argument( '-v', '--vertical', action='store_true' )
-    parser.add_argument( '-ib', '--inbpp', type=int, default=1 )
-    parser.add_argument( '-ob', '--outbpp', type=int )
+    parser.add_argument( '-of', '--outfile', type=str, required=True,
+        help='Specify path of output file to write.' )
+    parser.add_argument( '-if', '--infile', type=str,
+        help='Specify path of input file to read.' )
+    parser.add_argument( '-z', '--zoom', type=int,
+        help='Zoom pixels in editor area.' )
+    parser.add_argument( '-pz', '--pzoom', type=int, default=4,
+        help='Zoom pixels in preview area.' )
+    parser.add_argument( '-is', '--insize', nargs="+", type=int,
+        help='Comma-separated input dimensions (e.g. 8, 8 for 8x8 pixels.' + \
+            'Defaults to trying to determine from infile.' )
+    parser.add_argument( '-os', '--outsize', nargs="+", type=int,
+        help='Comma-separated output dimensions (e.g. 8, 8 for 8x8 pixels.' + \
+            'Defaults to 8x8.' )
+    parser.add_argument( '-v', '--vertical', action='store_true',
+        help='Write output as columns of rows, rather than rows of columns.' )
+    parser.add_argument( '-ib', '--inbpp', type=int, default=1,
+        help='Output BPP. Defaults to trying to determine from infile.' )
+    parser.add_argument( '-ob', '--outbpp', type=int,
+        help='Output BPP. Defaults to 1 (monochrome).' )
     parser.add_argument( '-ie', '--inendian', type=str, default='b',
-        help='Use little-endian format.' )
+        help='Assume LSB-first format in input file.' )
     parser.add_argument( '-oe', '--outendian', type=str,
-        help='Use little-endian format.' )
+        help='Write MSB-first format in output file.' )
     parser.add_argument( '-ii', '--ininterlace', type=str, default='f',
-        help='Place even lines in top half and odd lines in the bottom.' )
+        help='Assume even lines in top half and odd lines in the bottom ' + \
+            'in input files.' )
     parser.add_argument( '-oi', '--outinterlace', type=str,
-        help='Place even lines in top half and odd lines in the bottom.' )
+        help='Place even lines in top half and odd lines in the bottom ' +
+            'in output files.' )
 
     args = parser.parse_args()
 
