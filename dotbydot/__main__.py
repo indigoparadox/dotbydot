@@ -84,7 +84,16 @@ class DotByDot( object ):
 
         self.logger = logging.getLogger( 'dotbydot' )
 
-        self.grid = header.read_file( filename_in, size_in, bpp_in, endian_in )
+        if filename_in:
+            # Open specified file.
+            self.grid = header.read_file(
+                filename_in, size_in, bpp_in, endian_in )
+
+        else:
+            # Create an empty grid.
+            self.grid = [
+                [0 for x in range( 0, self.size_out[X] )]
+                for y in range( 0, self.size_out[Y] )]
 
         # Pad rows if size_out is bigger than size_in.
         for row_idx in range( self.size_in[Y] ):
